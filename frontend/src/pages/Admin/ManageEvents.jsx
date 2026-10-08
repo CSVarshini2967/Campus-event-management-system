@@ -1,1 +1,1 @@
-export default function ManageEvents(){ return null; }
+export { default } from "./AdminDashboard";

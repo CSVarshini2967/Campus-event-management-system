@@ -1,13 +1,17 @@
-// Reference only.
-// Example: roleMiddleware("admin")
-
-function roleMiddleware(requiredRole) {
+const authorizeRoles = (...allowedRoles) => {
   return (req, res, next) => {
-    if (!req.user || req.user.role !== requiredRole) {
-      return res.status(403).json({ message: "Access denied" });
+    if (!req.user) {
+      return res.status(401).json({ message: "Authentication required." });
     }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        message: `Access denied. Requires one of the following roles: ${allowedRoles.join(", ")}.`
+      });
+    }
+
     next();
   };
-}
+};
 
-module.exports = roleMiddleware;
+module.exports = authorizeRoles;

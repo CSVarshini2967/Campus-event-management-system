@@ -1,396 +1,246 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   CalendarDays,
   ClipboardList,
   MessageSquare,
   Home,
-  Settings,
   LogOut,
-  Bell,
-  Search,
   Star,
   Send,
   CheckCircle2,
+  AlertCircle
 } from "lucide-react";
+import { feedbackService, registrationService } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 
-function Feedback({ user, onNavigate }) {
-  const [selectedEvent, setSelectedEvent] = useState("");
-  const [rating, setRating] = useState(0);
-  const [feedback, setFeedback] = useState("");
+function Feedback({ initialEventId, onNavigate }) {
+  const { user, logout } = useAuth();
+  const [registeredEvents, setRegisteredEvents] = useState([]);
+  const [selectedEventId, setSelectedEventId] = useState(initialEventId || "");
+  const [rating, setRating] = useState(5);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [toast, setToast] = useState(null);
 
-  const registeredEvents = [
-    "CSE Tech Fest",
-    "Cultural Night",
-    "Sports Meet",
-  ];
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
-  function handleSubmit(event) {
-    event.preventDefault();
+  useEffect(() => {
+    async function loadEvents() {
+      try {
+        const data = await registrationService.getMyRegistrations();
+        const active = (data || []).filter((r) => r.registration_status === "registered");
+        setRegisteredEvents(active);
+        if (!selectedEventId && active.length > 0) {
+          setSelectedEventId(active[0].event_id);
+        }
+      } catch (err) {
+        console.error("Failed to load registrations:", err);
+      }
+    }
+    loadEvents();
+  }, []);
 
-    if (!selectedEvent) {
-      alert("Please select an event.");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!selectedEventId) {
+      showToast("Please select an event to review.", "error");
       return;
     }
 
-    if (rating === 0) {
-      alert("Please provide a rating.");
+    if (!rating || rating < 1 || rating > 5) {
+      showToast("Please select a star rating between 1 and 5.", "error");
       return;
     }
 
-    if (!feedback.trim()) {
-      alert("Please write your feedback.");
-      return;
+    try {
+      setLoading(true);
+      await feedbackService.submit(selectedEventId, { rating, comment });
+      setSubmitted(true);
+      showToast("Thank you! Your feedback has been submitted.");
+    } catch (err) {
+      showToast(err.response?.data?.message || "Failed to submit feedback.", "error");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setSubmitted(true);
-  }
-
-  function handleLogout() {
-    localStorage.removeItem("campus_event_student_session");
-    sessionStorage.removeItem("student_current_page");
-    window.location.reload();
-  }
-
-  function resetForm() {
-    setSelectedEvent("");
-    setRating(0);
-    setFeedback("");
+  const resetForm = () => {
     setSubmitted(false);
-  }
+    setRating(5);
+    setComment("");
+  };
 
   return (
     <div className="app-shell student-app">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`toast-notification ${toast.type}`}>
+          {toast.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          <span>{toast.message}</span>
+        </div>
+      )}
 
       {/* Sidebar */}
       <aside className="sidebar">
-
         <div className="brand">
           <div className="brand-icon">
             <CalendarDays size={20} />
           </div>
-
           <div>
             <strong>Campus Events</strong>
-            <span>Management System</span>
+            <span>Student Portal</span>
           </div>
         </div>
 
         <nav>
-
-          <button
-            className="side-link"
-            onClick={() => onNavigate("dashboard")}
-          >
+          <button className="side-link" onClick={() => onNavigate("dashboard")}>
             <Home size={18} />
             <span>Dashboard</span>
           </button>
-
-          <button
-            className="side-link"
-            onClick={() => onNavigate("events")}
-          >
+          <button className="side-link" onClick={() => onNavigate("events")}>
             <CalendarDays size={18} />
             <span>Events</span>
           </button>
-
-          <button
-            className="side-link"
-            onClick={() => onNavigate("my-events")}
-          >
+          <button className="side-link" onClick={() => onNavigate("my-events")}>
             <ClipboardList size={18} />
             <span>My Events</span>
           </button>
-
-          <button className="side-link active">
+          <button className="side-link active" onClick={() => onNavigate("feedback")}>
             <MessageSquare size={18} />
             <span>Feedback</span>
           </button>
-
-          <button className="side-link">
-            <Settings size={18} />
-            <span>Settings</span>
-          </button>
-
         </nav>
 
         <div className="sidebar-bottom">
-
-          <button
-            className="side-link logout"
-            onClick={handleLogout}
-          >
+          <button className="side-link logout" onClick={logout}>
             <LogOut size={18} />
             <span>Logout</span>
           </button>
-
         </div>
-
       </aside>
 
-      {/* Topbar */}
-      <header className="topbar">
-
-        <div className="brand-mobile">
-          <div className="brand-icon">
-            <CalendarDays size={17} />
-          </div>
-
-          <strong>Campus Events</strong>
-        </div>
-
-        <div className="search-wrap">
-          <Search size={17} />
-
-          <input
-            type="text"
-            placeholder="Search events..."
-          />
-        </div>
-
-        <div className="top-actions">
-
-          <button className="icon-btn">
-            <Bell size={19} />
-            <span className="notification-dot"></span>
-          </button>
-
-          <div className="profile">
-
-            <div className="avatar">
-              {user?.name?.charAt(0).toUpperCase() || "S"}
-            </div>
-
-            <div className="profile-copy">
-              <b>{user?.name || "Student"}</b>
-              <span>{user?.department || "Student"}</span>
-            </div>
-
-          </div>
-
-        </div>
-
-      </header>
-
-      {/* Main */}
+      {/* Main Content */}
       <main className="main">
-
         <div className="page-header">
-
           <div>
-            <h1>Event Feedback</h1>
-
-            <p>
-              Share your experience and help us improve future campus events.
-            </p>
+            <h1>Event Feedback & Ratings</h1>
+            <p>Share your event experience to help organizers enhance future campus activities.</p>
           </div>
-
         </div>
 
-        {submitted ? (
-
-          <section className="content-card">
-
-            <div className="empty-state">
-
-              <CheckCircle2 size={55} />
-
-              <h2>Thank You!</h2>
-
-              <p>
-                Your feedback has been submitted successfully.
+        <div style={{ maxWidth: "680px" }}>
+          {submitted ? (
+            <div className="content-card" style={{ textAlign: "center", padding: "48px 24px" }}>
+              <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "rgba(34, 197, 94, 0.15)", color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px auto" }}>
+                <CheckCircle2 size={36} />
+              </div>
+              <h2 style={{ fontSize: "22px", marginBottom: "8px" }}>Feedback Received!</h2>
+              <p style={{ color: "var(--text-secondary)", marginBottom: "24px" }}>
+                Thank you for rating your campus event. Your feedback is appreciated.
               </p>
-
-              <button
-                className="primary-btn"
-                onClick={resetForm}
-              >
-                Submit Another Feedback
-              </button>
-
-            </div>
-
-          </section>
-
-        ) : (
-
-          <section className="content-card">
-
-            <div className="card-head">
-
-              <div>
-                <h2>Share Your Experience</h2>
-
-                <p>
-                  Tell us what you liked and what we can improve.
-                </p>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+                <button className="primary-btn" onClick={resetForm}>
+                  Submit Another Feedback
+                </button>
+                <button className="btn-sm" onClick={() => onNavigate("my-events")}>
+                  View My Events
+                </button>
               </div>
-
-              <MessageSquare size={21} />
-
             </div>
-
-            <form
-              className="form-grid"
-              onSubmit={handleSubmit}
-            >
-
-              {/* Event */}
-              <div className="form-group">
-
-                <label htmlFor="event">
-                  Select Event
-                </label>
-
-                <select
-                  id="event"
-                  value={selectedEvent}
-                  onChange={(e) => setSelectedEvent(e.target.value)}
-                >
-                  <option value="">
-                    Choose an event
-                  </option>
-
-                  {registeredEvents.map((event) => (
-                    <option
-                      key={event}
-                      value={event}
-                    >
-                      {event}
-                    </option>
-                  ))}
-
-                </select>
-
-              </div>
-
-              {/* Rating */}
-              <div className="form-group">
-
-                <label>
-                  Rate Your Experience
-                </label>
-
-                <div className="rating">
-
-                  {[1, 2, 3, 4, 5].map((star) => (
-
-                    <button
-                      type="button"
-                      key={star}
-                      className={`star ${
-                        rating >= star ? "selected" : ""
-                      }`}
-                      onClick={() => setRating(star)}
-                      aria-label={`Rate ${star} out of 5`}
-                    >
-                      <Star
-                        size={28}
-                        fill={
-                          rating >= star
-                            ? "currentColor"
-                            : "none"
-                        }
-                      />
-                    </button>
-
-                  ))}
-
+          ) : (
+            <div className="content-card">
+              <div className="card-head">
+                <div>
+                  <h2>Submit Event Review</h2>
+                  <p>Select a registered event and leave your honest rating and thoughts.</p>
                 </div>
-
-                <small>
-                  {rating === 0
-                    ? "Select a rating from 1 to 5"
-                    : `${rating} out of 5 stars`}
-                </small>
-
               </div>
 
-              {/* Feedback */}
-              <div className="form-group">
+              {registeredEvents.length === 0 ? (
+                <div style={{ padding: "24px 0", color: "var(--text-muted)" }}>
+                  <p>You have not registered for any events yet. You can only review events you have registered for.</p>
+                  <button className="primary-btn" style={{ marginTop: "16px" }} onClick={() => onNavigate("events")}>
+                    Browse Events
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                  <div>
+                    <label style={{ display: "block", marginBottom: "8px", fontWeight: "500", fontSize: "14px" }}>
+                      Select Event
+                    </label>
+                    <select
+                      value={selectedEventId}
+                      onChange={(e) => setSelectedEventId(e.target.value)}
+                      style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}
+                    >
+                      {registeredEvents.map((r) => (
+                        <option key={r.event_id} value={r.event_id}>
+                          {r.title} ({r.event_date})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                <label htmlFor="feedback">
-                  Your Feedback
-                </label>
+                  <div>
+                    <label style={{ display: "block", marginBottom: "8px", fontWeight: "500", fontSize: "14px" }}>
+                      Your Rating (1 to 5 Stars)
+                    </label>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        const active = (hoverRating || rating) >= star;
+                        return (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setRating(star)}
+                            onMouseEnter={() => setHoverRating(star)}
+                            onMouseLeave={() => setHoverRating(0)}
+                            style={{ background: "transparent", border: "none", cursor: "pointer", padding: "4px" }}
+                          >
+                            <Star
+                              size={28}
+                              color={active ? "#f59e0b" : "rgba(255,255,255,0.2)"}
+                              fill={active ? "#f59e0b" : "none"}
+                            />
+                          </button>
+                        );
+                      })}
+                      <span style={{ alignSelf: "center", marginLeft: "8px", color: "#f59e0b", fontWeight: "bold" }}>
+                        {rating} / 5 Stars
+                      </span>
+                    </div>
+                  </div>
 
-                <textarea
-                  id="feedback"
-                  rows="7"
-                  placeholder="Write your feedback here..."
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                />
+                  <div>
+                    <label style={{ display: "block", marginBottom: "8px", fontWeight: "500", fontSize: "14px" }}>
+                      Comments & Experience
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      placeholder="What did you like most? What can be improved?"
+                      style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", resize: "vertical" }}
+                    />
+                  </div>
 
-              </div>
-
-              {/* Submit */}
-              <div className="form-actions">
-
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => onNavigate("dashboard")}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="primary-btn"
-                >
-                  <Send size={16} />
-                  Submit Feedback
-                </button>
-
-              </div>
-
-            </form>
-
-          </section>
-
-        )}
-
-        {/* Guidelines */}
-        <section className="content-card">
-
-          <div className="card-head">
-
-            <div>
-              <h2>Feedback Guidelines</h2>
-
-              <p>
-                Please keep your feedback constructive and respectful.
-              </p>
+                  <button className="primary-btn" type="submit" disabled={loading} style={{ alignSelf: "flex-start" }}>
+                    <Send size={16} />
+                    {loading ? "Submitting..." : "Submit Feedback"}
+                  </button>
+                </form>
+              )}
             </div>
-
-          </div>
-
-          <div className="event-description">
-
-            <ul>
-              <li>
-                Share your honest experience about the event.
-              </li>
-
-              <li>
-                Mention what you enjoyed the most.
-              </li>
-
-              <li>
-                Suggest improvements for future events.
-              </li>
-
-              <li>
-                Avoid sharing personal or sensitive information.
-              </li>
-            </ul>
-
-          </div>
-
-        </section>
-
+          )}
+        </div>
       </main>
-
     </div>
   );
 }

@@ -1,52 +1,56 @@
 CREATE DATABASE IF NOT EXISTS campus_event_db;
 USE campus_event_db;
 
-CREATE TABLE users (
+-- 1. USERS TABLE
+CREATE TABLE IF NOT EXISTS users (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
-    role ENUM('student', 'admin') NOT NULL DEFAULT 'student',
+    role ENUM('student', 'organiser', 'admin') NOT NULL DEFAULT 'student',
     roll_no VARCHAR(50),
     department VARCHAR(100),
     year INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE clubs (
+-- 2. CLUBS TABLE
+CREATE TABLE IF NOT EXISTS clubs (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(150) NOT NULL,
     description TEXT,
     coordinator_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (coordinator_id) REFERENCES users(id)
         ON DELETE SET NULL
 );
 
-CREATE TABLE venues (
+-- 3. VENUES TABLE
+CREATE TABLE IF NOT EXISTS venues (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(150) NOT NULL,
     location VARCHAR(255),
-    capacity INT
+    capacity INT NOT NULL DEFAULT 100,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE events (
+-- 4. EVENTS TABLE
+CREATE TABLE IF NOT EXISTS events (
     id INT PRIMARY KEY AUTO_INCREMENT,
     title VARCHAR(200) NOT NULL,
     description TEXT,
     category VARCHAR(50) NOT NULL,
     event_date DATE NOT NULL,
-    start_time TIME,
-    end_time TIME,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
     registration_deadline DATE,
-    capacity INT,
+    capacity INT NOT NULL DEFAULT 100,
     club_id INT,
     venue_id INT,
     created_by INT NOT NULL,
-    status ENUM('draft', 'published', 'completed', 'cancelled')
-        DEFAULT 'published',
+    status ENUM('upcoming', 'ongoing', 'completed', 'cancelled') DEFAULT 'upcoming',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     FOREIGN KEY (club_id) REFERENCES clubs(id)
         ON DELETE SET NULL,
@@ -56,7 +60,8 @@ CREATE TABLE events (
         ON DELETE RESTRICT
 );
 
-CREATE TABLE registrations (
+-- 5. REGISTRATIONS TABLE
+CREATE TABLE IF NOT EXISTS registrations (
     id INT PRIMARY KEY AUTO_INCREMENT,
     student_id INT NOT NULL,
     event_id INT NOT NULL,
@@ -68,10 +73,11 @@ CREATE TABLE registrations (
     FOREIGN KEY (event_id) REFERENCES events(id)
         ON DELETE CASCADE,
 
-    UNIQUE (student_id, event_id)
+    UNIQUE KEY unique_student_event (student_id, event_id)
 );
 
-CREATE TABLE attendance (
+-- 6. ATTENDANCE TABLE
+CREATE TABLE IF NOT EXISTS attendance (
     id INT PRIMARY KEY AUTO_INCREMENT,
     registration_id INT NOT NULL UNIQUE,
     status ENUM('present', 'absent') DEFAULT 'absent',
@@ -81,11 +87,12 @@ CREATE TABLE attendance (
         ON DELETE CASCADE
 );
 
-CREATE TABLE feedback (
+-- 7. FEEDBACK TABLE
+CREATE TABLE IF NOT EXISTS feedback (
     id INT PRIMARY KEY AUTO_INCREMENT,
     student_id INT NOT NULL,
     event_id INT NOT NULL,
-    rating INT NOT NULL,
+    rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
     comment TEXT,
     submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -94,5 +101,5 @@ CREATE TABLE feedback (
     FOREIGN KEY (event_id) REFERENCES events(id)
         ON DELETE CASCADE,
 
-    UNIQUE (student_id, event_id)
+    UNIQUE KEY unique_student_feedback (student_id, event_id)
 );

@@ -1,78 +1,87 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { authService } from "../services/api";
 
 const AuthContext = createContext(null);
-const SESSION_KEY = "campus_event_admin_session";
-const USERS_KEY = "campus_event_users";
 
-const defaultAdmin = {
-  id: "admin-1",
-  name: "Admin",
-  email: "admin@campusevents.com",
-  password: "admin123",
-  role: "ADMIN",
-  department: "Faculty"
-};
-
-function readUsers() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
-    return [defaultAdmin, ...saved.filter(u => u.email !== defaultAdmin.email)];
-  } catch {
-    return [defaultAdmin];
-  }
-}
+const TOKEN_KEY = "campus_event_token";
+const USER_KEY = "campus_event_user";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); }
-    catch { return null; }
+    try {
+      const stored = localStorage.getItem(USER_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
   });
 
+  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    else localStorage.removeItem(SESSION_KEY);
-  }, [user]);
-
-  function login(email, password) {
-    const account = readUsers().find(
-      u => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password
-    );
-    if (!account) throw new Error("Invalid email or password");
-    const sessionUser = { id: account.id, name: account.name, email: account.email, role: account.role, department: account.department };
-    setUser(sessionUser);
-    return sessionUser;
-  }
-
-  function register(data) {
-    const users = readUsers();
-    if (users.some(u => u.email.toLowerCase() === data.email.trim().toLowerCase())) {
-      throw new Error("An account with this email already exists");
+    async function verifyUser() {
+      if (token) {
+        try {
+          const res = await authService.getMe();
+          setUser(res.user);
+          localStorage.setItem(USER_KEY, JSON.stringify(res.user));
+        } catch (err) {
+          console.error("Token validation failed:", err);
+          logout();
+        }
+      }
+      setLoading(false);
     }
-    const account = {
-      id: crypto.randomUUID(),
-      name: data.name,
-      email: data.email.trim(),
-      password: data.password,
-      role: "STUDENT",
-      department: data.department || "CSE"
-    };
-    const customUsers = users.filter(u => u.email !== defaultAdmin.email);
-    localStorage.setItem(USERS_KEY, JSON.stringify([...customUsers, account]));
-    return login(account.email, account.password);
-  }
+    verifyUser();
+  }, [token]);
 
-  function logout() {
+  const login = async (email, password) => {
+    const data = await authService.login({ email, password });
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    setToken(data.token);
+    setUser(data.user);
+    return data.user;
+  };
+
+  const register = async (formData) => {
+    const data = await authService.register(formData);
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    setToken(data.token);
+    setUser(data.user);
+    return data.user;
+  };
+
+  const logout = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    setToken(null);
     setUser(null);
-    localStorage.removeItem(SESSION_KEY);
-  }
+  };
 
-  return <AuthContext.Provider value={{ user, login, register, logout, isAuthenticated: !!user }}>
-    {children}
-  </AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        isAuthenticated: !!user && !!token,
+        login,
+        register,
+        logout
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
-  const value = useContext(AuthContext);
-  if (!value) throw new Error("useAuth must be used inside AuthProvider");
-  return value;
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }
